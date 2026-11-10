@@ -1,5 +1,5 @@
-// 場勘相機 service worker: keeps the app shell available offline.
-const CACHE = "sitecam-v4";
+// 工程相機 service worker: keeps the app shell available offline.
+const CACHE = "sitecam-v5";
 const SHELL = ["./", "./index.html", "./manifest.webmanifest", "./icons/apple-touch-icon.png", "./icons/icon-192.png", "./icons/icon-512.png"];
 
 self.addEventListener("install", e => {

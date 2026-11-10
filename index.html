@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>場勘相機</title>
+<title>工程相機</title>
 <meta name="theme-color" content="#0f6b5a">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="場勘相機">
+<meta name="apple-mobile-web-app-title" content="工程相機">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="icon" href="icons/icon-192.png">
@@ -131,7 +131,7 @@ textarea{min-height:96px;resize:vertical}
   <header class="top">
     <button class="iconbtn hidden" id="backBtn" aria-label="返回"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
     <div style="flex:1;min-width:0">
-      <h1 id="title">場勘相機</h1>
+      <h1 id="title">工程相機</h1>
       <div class="status"><span class="dot" id="dot"></span><span id="statusText">準備中…</span></div>
     </div>
     <button class="iconbtn" id="moreBtn" aria-label="選單"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>
@@ -255,7 +255,7 @@ textarea{min-height:96px;resize:vertical}
 /* ============ 設定 ============ */
 const CLIENT_ID = "262376260711-bje9oqh7fs3gtkj10bdeban1ck157o0k.apps.googleusercontent.com";   // Google OAuth 用戶端 ID
 const SCOPE = "https://www.googleapis.com/auth/drive.file";
-const ROOT_FOLDER_NAME = "場勘相機";
+const ROOT_FOLDER_NAME = "工程相機";
 const CHIPS = ["人孔","管線","路面","既有設施","障礙物","量測","施工空間","待確認","需補拍"];
 
 (() => {
@@ -407,11 +407,16 @@ function patchFile(id,meta){return gfetch(`${API}/${id}?fields=id`,{method:"PATC
 async function fileAlive(id){try{const f=await gfetch(`${API}/${id}?fields=id,trashed`);return f&&!f.trashed}catch(e){if(e instanceof AuthErr)throw e;if(e.status===404)return false;throw e}}
 async function rootFolder(){
   let id=await kvGet("rootId");
-  if(id&&await fileAlive(id))return id;
-  const q=encodeURIComponent(`name='${ROOT_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+  if(id&&await fileAlive(id)){
+    if(await kvGet("rootName")!==ROOT_FOLDER_NAME){try{await patchFile(id,{name:ROOT_FOLDER_NAME});await kvSet("rootName",ROOT_FOLDER_NAME)}catch(e){if(e instanceof AuthErr)throw e}}
+    return id;
+  }
+  // 也找舊名稱「場勘相機」的資料夾，找到就改名沿用
+  const q=encodeURIComponent(`(name='${ROOT_FOLDER_NAME}' or name='場勘相機') and mimeType='application/vnd.google-apps.folder' and trashed=false`);
   const r=await gfetch(`${API}?q=${q}&fields=files(id)&pageSize=1`);
-  id=r.files&&r.files[0]?r.files[0].id:(await createFolder(ROOT_FOLDER_NAME)).id;
-  await kvSet("rootId",id);return id;
+  if(r.files&&r.files[0]){id=r.files[0].id;try{await patchFile(id,{name:ROOT_FOLDER_NAME})}catch(e){if(e instanceof AuthErr)throw e}}
+  else id=(await createFolder(ROOT_FOLDER_NAME)).id;
+  await kvSet("rootId",id);await kvSet("rootName",ROOT_FOLDER_NAME);return id;
 }
 async function siteFolder(site){
   if(site.driveFolderId&&await fileAlive(site.driveFolderId))return site.driveFolderId;
@@ -514,7 +519,7 @@ async function route(){
   if(h.startsWith("s-")){const s=await dbGet("sites",h.slice(2));if(!s){location.hash="";return}curSite=s;await refreshCurrent();showSite();startGeo()}
   else{curSite=null;photos=[];stopGeo();if(selMode)setSelMode(false);showHome()}
 }
-function showHome(){$("#homeView").classList.remove("hidden");$("#siteView").classList.add("hidden");$("#dockHome").classList.remove("hidden");$("#dockSite").classList.add("hidden");$("#backBtn").classList.add("hidden");$("#title").textContent="場勘相機";reloadSites()}
+function showHome(){$("#homeView").classList.remove("hidden");$("#siteView").classList.add("hidden");$("#dockHome").classList.remove("hidden");$("#dockSite").classList.add("hidden");$("#backBtn").classList.add("hidden");$("#title").textContent="工程相機";reloadSites()}
 function showSite(){if(selMode)setSelMode(false);$("#homeView").classList.add("hidden");$("#siteView").classList.remove("hidden");$("#dockHome").classList.add("hidden");$("#dockSite").classList.remove("hidden");$("#backBtn").classList.remove("hidden");renderSiteHead();renderPhotos();renderGpsBar()}
 function renderSiteHead(){if(!curSite)return;$("#title").textContent=curSite.name;$("#siteMeta").innerHTML=[esc(curSite.date),esc(curSite.address),`${photos.length} 張`].filter(Boolean).join(" · ")+(curSite.driveFolderUrl?` · <a href="${curSite.driveFolderUrl}" target="_blank" rel="noopener">📂 Drive 資料夾</a>`:"")}
 $("#backBtn").onclick=()=>{location.hash=""};
@@ -786,7 +791,7 @@ $("#moreBtn").onclick=()=>{
     if(curSite.driveFolderUrl)items.push(`<a href="${curSite.driveFolderUrl}" target="_blank" rel="noopener">📂 開啟 Drive 資料夾<small>照片原圖都在這裡</small></a>`);
     if(curSite.driveSheetUrl)items.push(`<a href="${curSite.driveSheetUrl}" target="_blank" rel="noopener">📊 開啟備註清單（Google 試算表）</a>`);
     items.push(`<button data-act="copy">複製全部備註<small>貼到 LINE、Email</small></button>`,`<button data-act="coords">複製全部 TWD97 座標<small>每行：編號,X,Y,備註，可貼到 Excel</small></button>`,`<button data-act="csv">匯出 CSV<small>Excel 可直接開啟</small></button>`,`<button data-act="report">匯出場勘報告（HTML）<small>含照片，可分享或列印成 PDF</small></button>`,`<button data-act="edit">編輯名稱 / 地址 / 日期</button>`,`<button data-act="delsite" style="color:var(--warn)">刪除整個場勘</button>`);
-  }else $("#menuTitle").textContent="場勘相機";
+  }else $("#menuTitle").textContent="工程相機";
   if(!CLIENT_ID.startsWith("__"))items.push(hasToken()?`<button data-act="sync">立即同步到 Drive</button>`:`<button data-act="login">連線 Google Drive</button>`);
   items.push(`<button data-act="album">拍照後自動存到手機相簿：${autoAlbum?"開":"關"}<small>${autoAlbum?"按「儲存」時跳出選單，點「儲存影像」即可。點此關閉":"點此開啟"}</small></button>`);
   items.push(`<button data-act="help">加到 iPhone 主畫面的方法</button>`);
@@ -806,7 +811,7 @@ async function menuAct(a){
   if(a==="album"){autoAlbum=!autoAlbum;try{localStorage.setItem("autoAlbum",autoAlbum?"on":"off")}catch{}toast(autoAlbum?"已開啟：拍照後自動存到相簿":"已關閉自動存到相簿")}
   if(a==="login")login(true);
   if(a==="sync"){toast("同步中…");sync()}
-  if(a==="help")confirmBox("加到主畫面","用 Safari 開啟本頁 → 按下方「分享」→「加入主畫面」→「加入」。之後從主畫面的「場勘相機」圖示開啟，就像一般 App。","知道了").then(()=>{});
+  if(a==="help")confirmBox("加到主畫面","用 Safari 開啟本頁 → 按下方「分享」→「加入主畫面」→「加入」。之後從主畫面的「工程相機」圖示開啟，就像一般 App。","知道了").then(()=>{});
 }
 
 /* ============ 啟動 ============ */

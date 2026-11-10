@@ -1,6 +1,6 @@
 {
-  "name": "場勘相機",
-  "short_name": "場勘相機",
+  "name": "工程相機",
+  "short_name": "工程相機",
   "description": "場勘拍照、即時備註、GPS 座標，自動存到 Google Drive",
   "lang": "zh-Hant",
   "start_url": "./",
