@@ -100,6 +100,22 @@ textarea{min-height:96px;resize:vertical}
 .toast{position:fixed;left:50%;bottom:110px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:999px;font-size:14px;z-index:40;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw;text-align:center}
 .toast.show{opacity:1}
 .hidden{display:none!important}
+.coord{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px;font-size:13px}
+.coord code{background:var(--chip);border-radius:8px;padding:4px 8px;font-family:ui-monospace,Menlo,monospace;font-size:13px}
+.cp{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:4px 10px;font-size:13px}
+.markbtn{border:1px solid var(--line);background:var(--bg);border-radius:12px;padding:8px 12px;font-size:14px;margin-top:8px;margin-right:6px}
+.editor{position:fixed;inset:0;background:#000;z-index:50;display:flex;flex-direction:column;color:#fff}
+.etop{display:flex;align-items:center;justify-content:space-between;padding:calc(env(safe-area-inset-top) + 8px) 12px 8px}
+.etop button{border:0;border-radius:10px;padding:8px 14px;font-weight:700;background:#333;color:#fff}
+.etop .primary{background:#3fbf9f;color:#06231c}
+.estage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:4px}
+.estage canvas{max-width:100%;max-height:100%;touch-action:none;display:block}
+.etools{padding:8px 10px calc(env(safe-area-inset-bottom) + 10px);display:grid;gap:8px;background:#111}
+.erow{display:flex;gap:6px;overflow-x:auto;align-items:center}
+.erow button{border:0;border-radius:10px;padding:8px 12px;background:#2a2a2a;color:#fff;font-size:14px;flex:none}
+.erow button.on{background:#3fbf9f;color:#06231c;font-weight:700}
+.sw{width:30px;height:30px;border-radius:50%!important;padding:0!important;border:3px solid #2a2a2a!important}
+.sw.on{border-color:#fff!important}
 </style>
 </head>
 <body>
@@ -151,6 +167,8 @@ textarea{min-height:96px;resize:vertical}
   <img class="preview" id="cPreview" alt="">
   <div class="strip" id="cStrip"></div>
   <div class="gps" id="cGpsLine"></div>
+  <div class="coord" id="cCoord"></div>
+  <button class="markbtn" id="cMark" type="button">✏️ 在照片上標示</button>
   <label class="f">備註</label>
   <textarea id="cNote" placeholder="拍到什麼？位置、狀況、尺寸、待辦…"></textarea>
   <button class="mic hidden" id="cMic" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 19v3"/></svg><span>語音輸入</span></button>
@@ -172,6 +190,8 @@ textarea{min-height:96px;resize:vertical}
   </div>
   <img class="preview" id="dImg" alt="">
   <div class="gps" id="dGpsLine"></div>
+  <div class="coord" id="dCoord"></div>
+  <div><button class="markbtn" id="dMark" type="button">✏️ 在照片上標示</button><button class="markbtn hidden" id="dRestore" type="button">↩ 還原原圖</button></div>
   <div class="gps" id="dDriveLine"></div>
   <label class="f">備註</label>
   <textarea id="dNote"></textarea>
@@ -195,6 +215,25 @@ textarea{min-height:96px;resize:vertical}
 <div class="scrim" id="confirmSheet"><div class="sheet">
   <h2 id="cfTitle"></h2><p id="cfText" class="sub" style="margin:0"></p>
   <div class="row"><button class="btn sec" id="cfNo">取消</button><button class="btn" id="cfYes" style="background:var(--warn);color:#fff">確定刪除</button></div>
+</div></div>
+
+<div class="editor hidden" id="editor">
+  <div class="etop"><button id="eCancel">取消</button><b>標示照片</b><button id="eDone" class="primary">完成</button></div>
+  <div class="estage" id="eStage"><canvas id="eCanvas"></canvas></div>
+  <div class="etools">
+    <div class="erow" id="eTools">
+      <button data-tool="arrow" class="on">➜ 箭頭</button><button data-tool="circle">◯ 圈</button><button data-tool="rect">▢ 框</button><button data-tool="pen">✎ 筆</button><button data-tool="text">T 文字</button>
+    </div>
+    <div class="erow" id="eColors"></div>
+    <div class="erow">
+      <button id="eSize">粗細：中</button><button id="eUndo">↶ 復原</button><button id="eClear">全清</button><button id="eCaption">加印資訊列</button>
+    </div>
+  </div>
+</div>
+<div class="scrim" id="textSheet" style="z-index:60"><div class="sheet">
+  <h2>輸入文字</h2>
+  <textarea id="tInput" style="min-height:70px" placeholder="例：破損處、管徑 30cm"></textarea>
+  <div class="row"><button class="btn sec" id="tCancel">取消</button><button class="btn" id="tOk">放上照片</button></div>
 </div></div>
 
 <div class="toast" id="toast"></div>
@@ -244,6 +283,27 @@ const toBlob=(c,q)=>new Promise(r=>c.toBlob(r,"image/jpeg",q));
 function safeTitle(t){return String(t||"").replace(/[\\/:*?"<>|\r\n\t]+/g," ").trim()}
 function llText(p){return p&&p.lat!=null?`${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}`:""}
 function mapUrl(p){return `https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}`}
+/* WGS84 → TWD97 TM2（GRS80，本島 121°，澎湖金馬 119°）*/
+function toTWD97(lat,lng){
+  const a=6378137,f=1/298.257222101,k0=0.9999,dx=250000,e2=f*(2-f),ep2=e2/(1-e2);
+  const zone=lng<120?119:121,l0=zone*Math.PI/180,phi=lat*Math.PI/180,lam=lng*Math.PI/180;
+  const sn=Math.sin(phi),c=Math.cos(phi),t=Math.tan(phi),N=a/Math.sqrt(1-e2*sn*sn),T=t*t,C=ep2*c*c,A=(lam-l0)*c,e4=e2*e2,e6=e4*e2;
+  const M=a*((1-e2/4-3*e4/64-5*e6/256)*phi-(3*e2/8+3*e4/32+45*e6/1024)*Math.sin(2*phi)+(15*e4/256+45*e6/1024)*Math.sin(4*phi)-(35*e6/3072)*Math.sin(6*phi));
+  const x=dx+k0*N*(A+(1-T+C)*A**3/6+(5-18*T+T*T+72*C-58*ep2)*A**5/120);
+  const y=k0*(M+N*t*(A*A/2+(5-T+9*C+4*C*C)*A**4/24+(61-58*T+T*T+600*C-330*ep2)*A**6/720));
+  return {x:+x.toFixed(3),y:+y.toFixed(3),zone};
+}
+function twd(p){return p&&p.lat!=null?toTWD97(p.lat,p.lng):null}
+function twdText(p){const t=twd(p);return t?`${t.x.toFixed(3)},${t.y.toFixed(3)}`:""}
+function twdLabel(p){const t=twd(p);return t?`TWD97${t.zone===119?"(119°)":""} X ${t.x.toFixed(3)}  Y ${t.y.toFixed(3)}`:""}
+async function copyText(t,msg){try{await navigator.clipboard.writeText(t);toast(msg)}catch{const ta=document.createElement("textarea");ta.value=t;document.body.appendChild(ta);ta.select();try{document.execCommand("copy");toast(msg)}catch{toast("無法複製")}ta.remove()}}
+function coordHtml(p,el){
+  if(!p||p.lat==null){el.innerHTML="";return}
+  const t=twd(p);
+  el.innerHTML=`<span>TWD97${t.zone===119?" 119°":""}</span><code>X ${t.x.toFixed(3)}　Y ${t.y.toFixed(3)}</code><button class="cp" data-c="twd">複製 TWD97</button><button class="cp" data-c="ll">複製經緯度</button>`;
+  el.querySelector('[data-c="twd"]').onclick=()=>copyText(twdText(p),"已複製 TWD97："+twdText(p));
+  el.querySelector('[data-c="ll"]').onclick=()=>copyText(`${p.lat},${p.lng}`,"已複製經緯度");
+}
 function parseLL(s){s=String(s||"").trim();if(!s)return null;const m=s.match(/@?(-?\d{1,2}(?:\.\d+)?)\s*[,，\s]\s*(-?\d{1,3}(?:\.\d+)?)/);if(!m)return undefined;const lat=+m[1],lng=+m[2];if(Math.abs(lat)>90||Math.abs(lng)>180)return undefined;return {lat:+lat.toFixed(7),lng:+lng.toFixed(7)}}
 function gpsHtml(p){if(p&&p.lat!=null)return `📍 <a href="${mapUrl(p)}" target="_blank" rel="noopener">${llText(p)}</a>${p.acc?` <span class="small">（誤差約 ${Math.round(p.acc)} 公尺${p.gpsSrc==="exif"?"，取自照片":p.gpsSrc==="device"?"，取自手機定位":""}）</span>`:p.gpsSrc==="exif"?' <span class="small">（取自照片）</span>':""}`;return "📍 沒有 GPS，可在下方輸入或貼上座標"}
 
@@ -346,7 +406,7 @@ async function siteFolder(site){
   return f.id;
 }
 function fileTitle(p){return `#${String(p.no).padStart(3,"0")}_${safeTitle(p.note||"無備註").slice(0,30)}.jpg`}
-function descText(p){return [p.note||"（無備註）",`拍攝時間：${fmtTime(p.takenAt)}`,p.lat!=null?`GPS：${llText(p)}${p.acc?`（±${Math.round(p.acc)}m）`:""}\n${mapUrl(p)}`:"GPS：無"].join("\n")}
+function descText(p){return [p.note||"（無備註）",`拍攝時間：${fmtTime(p.takenAt)}`,p.lat!=null?`${twdLabel(p)}\nGPS：${llText(p)}${p.acc?`（±${Math.round(p.acc)}m）`:""}\n${mapUrl(p)}`:"GPS：無"].join("\n")}
 
 /* ============ 同步 ============ */
 async function sync(){
@@ -370,11 +430,21 @@ async function sync(){
           uploading.add(p.id);renderPhotos();
           try{const folder=await siteFolder(site);
             const f=await uploadFile({name:fileTitle(p),description:descText(p),parents:[folder]},p.blob);
-            p.driveFileId=f.id;p.driveUrl=f.webViewLink||`https://drive.google.com/file/d/${f.id}/view`;p.metaDirty=false;p.err=null;
+            p.driveFileId=f.id;p.driveUrl=f.webViewLink||`https://drive.google.com/file/d/${f.id}/view`;p.metaDirty=false;p.contentDirty=false;p.err=null;
             // 上傳完成：把手機裡的原圖縮成 1280px 省空間
             try{const {img,url}=await loadImage(p.blob);p.blob=await toBlob(resize(img,1280),.8);p.slim=true;URL.revokeObjectURL(url)}catch{}
+            if(p.orig){try{const {img,url}=await loadImage(p.orig);p.orig=await toBlob(resize(img,1280),.8);URL.revokeObjectURL(url)}catch{}}
             await dbPut("photos",p);changed=true;
           }catch(e){if(e instanceof AuthErr)throw e;p.err=e.message||"上傳失敗";await dbPut("photos",p)}
+          finally{uploading.delete(p.id);await refreshCurrent()}
+        }else if(p.driveFileId&&p.contentDirty&&p.blob){
+          uploading.add(p.id);renderPhotos();
+          try{await gfetch(`${UP}/${p.driveFileId}?uploadType=media&fields=id`,{method:"PATCH",headers:{"Content-Type":"image/jpeg"},body:p.blob});
+            if(p.metaDirty)await patchFile(p.driveFileId,{name:fileTitle(p),description:descText(p)});
+            p.contentDirty=false;p.metaDirty=false;
+            try{const {img,url}=await loadImage(p.blob);p.blob=await toBlob(resize(img,1280),.8);p.slim=true;URL.revokeObjectURL(url)}catch{}
+            await dbPut("photos",p);changed=true;
+          }catch(e){if(e instanceof AuthErr)throw e;if(e.status===404){p.driveFileId=null;p.driveUrl=null;p.contentDirty=false;await dbPut("photos",p)}}
           finally{uploading.delete(p.id);await refreshCurrent()}
         }else if(p.driveFileId&&p.metaDirty){
           try{await patchFile(p.driveFileId,{name:fileTitle(p),description:descText(p)});p.metaDirty=false;await dbPut("photos",p);changed=true}
@@ -385,7 +455,7 @@ async function sync(){
       if((changed||site.sheetDirty)&&list.length&&list.every(p=>p.driveFileId)){
         try{const folder=await siteFolder(site);
           const q=v=>`"${String(v??"").replace(/"/g,'""')}"`;
-          const rows=[["編號","拍攝時間","備註","緯度","經度","GPS誤差(公尺)","地圖連結","Drive 照片"].map(q).join(",")].concat(list.map(p=>[p.no,fmtTime(p.takenAt),p.note,p.lat??"",p.lng??"",p.acc?Math.round(p.acc):"",p.lat!=null?mapUrl(p):"",p.driveUrl||""].map(q).join(",")));
+          const rows=[["編號","拍攝時間","備註","TWD97 X","TWD97 Y","緯度","經度","GPS誤差(公尺)","地圖連結","Drive 照片"].map(q).join(",")].concat(list.map(p=>{const t=twd(p);return [p.no,fmtTime(p.takenAt),p.note,t?t.x.toFixed(3):"",t?t.y.toFixed(3):"",p.lat??"",p.lng??"",p.acc?Math.round(p.acc):"",p.lat!=null?mapUrl(p):"",p.driveUrl||""].map(q).join(",")}));
           const f=await uploadFile({name:safeTitle(`${site.name}_備註清單`),mimeType:"application/vnd.google-apps.spreadsheet",parents:[folder]},new Blob([rows.join("\n")],{type:"text/csv"}));
           const old=site.driveSheetId;site.driveSheetId=f.id;site.driveSheetUrl=f.webViewLink;site.sheetDirty=false;await dbPut("sites",site);
           if(old&&old!==f.id)patchFile(old,{trashed:true}).catch(()=>{});
@@ -445,7 +515,7 @@ function renderPhotos(){
   if(!photos.length){el.innerHTML=`<div class="empty"><b>還沒有照片</b>按「拍照」開啟相機，拍完馬上寫備註。</div>`;return}
   el.innerHTML=ordered().map(p=>`<button class="photo" data-id="${p.id}"><img class="th" src="${p.thumb}" alt="">
     <div class="meta"><div class="no">#${p.no}</div><div class="note ${p.note?"":"none"}">${esc(p.note||"（無備註）")}</div>
-    <div class="small">${fmtTime(p.takenAt)}</div>${p.lat!=null?`<div class="pin">📍 ${llText(p)}</div>`:""}${driveBadge(p)}</div></button>`).join("");
+    <div class="small">${fmtTime(p.takenAt)}</div>${p.lat!=null?`<div class="pin">📍 ${twdLabel(p)}</div>`:""}${p.orig?`<div class="small">✏️ 已標示</div>`:""}${driveBadge(p)}</div></button>`).join("");
   el.querySelectorAll(".photo").forEach(b=>b.onclick=()=>openDetail(b.dataset.id));
 }
 document.querySelectorAll("[data-layout]").forEach(b=>b.onclick=()=>{layout=b.dataset.layout;document.querySelectorAll("[data-layout]").forEach(x=>x.classList.toggle("on",x===b));renderPhotos()});
@@ -471,6 +541,74 @@ const stopMics=()=>{["#cMic","#dMic"].forEach(s=>{const b=$(s);b._stop&&b._stop(
 function chipRow(el,ta){el.innerHTML=CHIPS.map(c=>`<button class="chip" type="button">${c}</button>`).join("");el.querySelectorAll(".chip").forEach(b=>b.onclick=()=>{const v=ta.value;ta.value=v?(/[\s、，]$/.test(v)?v:v+"、")+b.textContent:b.textContent;ta.focus()})}
 chipRow($("#cChips"),$("#cNote"));chipRow($("#dChips"),$("#dNote"));
 
+/* ============ 照片標示編輯器 ============ */
+const COLORS=["#ff3b30","#ffcc00","#34c759","#0a84ff","#ffffff","#000000"];
+const ed={tool:"arrow",color:COLORS[0],size:1,ops:[],draft:null,caption:false,info:null,img:null,w:0,h:0,resolve:null};
+const eCan=$("#eCanvas"),eCtx=eCan.getContext("2d");
+$("#eColors").innerHTML=COLORS.map((c,i)=>`<button class="sw${i?"":" on"}" data-c="${c}" style="background:${c}"></button>`).join("");
+$("#eColors").querySelectorAll(".sw").forEach(b=>b.onclick=()=>{ed.color=b.dataset.c;$("#eColors").querySelectorAll(".sw").forEach(x=>x.classList.toggle("on",x===b))});
+$("#eTools").querySelectorAll("button").forEach(b=>b.onclick=()=>{ed.tool=b.dataset.tool;$("#eTools").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b))});
+const SIZES=[["細",.6],["中",1],["粗",1.7]];let sizeI=1;
+$("#eSize").onclick=()=>{sizeI=(sizeI+1)%3;ed.size=SIZES[sizeI][1];$("#eSize").textContent="粗細："+SIZES[sizeI][0]};
+$("#eUndo").onclick=()=>{ed.ops.pop();edRender()};
+$("#eClear").onclick=()=>{ed.ops=[];edRender()};
+$("#eCaption").onclick=()=>{ed.caption=!ed.caption;$("#eCaption").classList.toggle("on",ed.caption);edRender()};
+const FONT='-apple-system,"PingFang TC","Microsoft JhengHei",sans-serif';
+function baseLw(){return Math.max(ed.w,ed.h)/220}
+function captionLines(ctx,fs){
+  const i=ed.info||{},maxW=ed.w-fs*1.6,out=[];
+  const wrap=t=>{let line="";for(const ch of t){if(ch==="\n"){out.push(line);line="";continue}if(ctx.measureText(line+ch).width>maxW){out.push(line);line=ch}else line+=ch}if(line)out.push(line)};
+  out.push([i.no?`#${i.no}`:"",i.site||"",i.time||""].filter(Boolean).join("　"));
+  ctx.font=`${fs}px ${FONT}`;
+  if(i.note)wrap(i.note);
+  if(i.twd)wrap(i.twd);
+  return out;
+}
+function edRender(){
+  const fs=Math.max(18,Math.round(ed.w/38));let lines=[],barH=0;
+  if(ed.caption){lines=captionLines(eCtx,fs);barH=Math.round(fs*0.9+lines.length*fs*1.35)}
+  if(eCan.width!==ed.w||eCan.height!==ed.h+barH){eCan.width=ed.w;eCan.height=ed.h+barH}
+  const c=eCtx;c.drawImage(ed.img,0,0,ed.w,ed.h);
+  for(const op of ed.draft?[...ed.ops,ed.draft]:ed.ops)drawOp(c,op);
+  if(ed.caption){c.fillStyle="#fff";c.fillRect(0,ed.h,ed.w,barH);c.fillStyle="#111";c.textBaseline="top";
+    lines.forEach((l,k)=>{c.font=`${k===0?"700 ":""}${fs}px ${FONT}`;c.fillText(l,fs*0.8,ed.h+fs*0.45+k*fs*1.35)})}
+}
+function drawOp(c,op){
+  c.save();c.strokeStyle=op.color;c.fillStyle=op.color;c.lineWidth=op.lw;c.lineCap="round";c.lineJoin="round";
+  c.shadowColor="rgba(0,0,0,.45)";c.shadowBlur=op.lw*1.2;
+  const a=op.p0,b=op.p1||op.p0;
+  if(op.type==="pen"){c.beginPath();op.pts.forEach((p,i)=>i?c.lineTo(p.x,p.y):c.moveTo(p.x,p.y));c.stroke()}
+  else if(op.type==="rect"){c.strokeRect(Math.min(a.x,b.x),Math.min(a.y,b.y),Math.abs(b.x-a.x),Math.abs(b.y-a.y))}
+  else if(op.type==="circle"){c.beginPath();c.ellipse((a.x+b.x)/2,(a.y+b.y)/2,Math.max(1,Math.abs(b.x-a.x)/2),Math.max(1,Math.abs(b.y-a.y)/2),0,0,Math.PI*2);c.stroke()}
+  else if(op.type==="arrow"){const ang=Math.atan2(b.y-a.y,b.x-a.x),hl=op.lw*4.5;c.beginPath();c.moveTo(a.x,a.y);c.lineTo(b.x-Math.cos(ang)*hl*0.6,b.y-Math.sin(ang)*hl*0.6);c.stroke();
+    c.beginPath();c.moveTo(b.x,b.y);c.lineTo(b.x-hl*Math.cos(ang-0.45),b.y-hl*Math.sin(ang-0.45));c.lineTo(b.x-hl*Math.cos(ang+0.45),b.y-hl*Math.sin(ang+0.45));c.closePath();c.fill()}
+  else if(op.type==="text"){const fs=op.lw*6.5;c.shadowBlur=0;c.font=`700 ${fs}px ${FONT}`;c.textBaseline="top";
+    const L=op.text.split("\n"),w=Math.max(...L.map(l=>c.measureText(l).width)),pad=fs*0.3,h=L.length*fs*1.25;
+    c.fillStyle=op.color==="#000000"?"rgba(255,255,255,.8)":"rgba(0,0,0,.6)";c.fillRect(a.x-pad,a.y-pad,w+pad*2,h+pad*1.6);
+    c.fillStyle=op.color;L.forEach((l,i)=>c.fillText(l,a.x,a.y+i*fs*1.25))}
+  c.restore();
+}
+function edPt(e){const r=eCan.getBoundingClientRect();return {x:(e.clientX-r.left)*eCan.width/r.width,y:Math.min(ed.h,(e.clientY-r.top)*eCan.height/r.height)}}
+eCan.addEventListener("pointerdown",e=>{e.preventDefault();const p=edPt(e);const lw=baseLw()*ed.size;
+  if(ed.tool==="text"){askText().then(t=>{if(t){ed.ops.push({type:"text",p0:p,text:t,color:ed.color,lw});edRender()}});return}
+  try{eCan.setPointerCapture(e.pointerId)}catch{}ed.draft={type:ed.tool,color:ed.color,lw,p0:p,p1:p,pts:[p]};edRender()});
+eCan.addEventListener("pointermove",e=>{if(!ed.draft)return;const p=edPt(e);if(ed.draft.type==="pen")ed.draft.pts.push(p);else ed.draft.p1=p;edRender()});
+const edUp=()=>{if(!ed.draft)return;const d=ed.draft;ed.draft=null;const moved=d.type==="pen"?d.pts.length>2:Math.hypot(d.p1.x-d.p0.x,d.p1.y-d.p0.y)>baseLw()*2;if(moved)ed.ops.push(d);edRender()};
+eCan.addEventListener("pointerup",edUp);eCan.addEventListener("pointercancel",edUp);
+function askText(){return new Promise(res=>{$("#tInput").value="";open("#textSheet");setTimeout(()=>$("#tInput").focus(),60);
+  $("#tOk").onclick=()=>{close("#textSheet");res($("#tInput").value.trim())};$("#tCancel").onclick=()=>{close("#textSheet");res("")}})}
+function openEditor(img,info){
+  return new Promise(res=>{
+    const s=Math.min(1,2400/Math.max(img.naturalWidth,img.naturalHeight));
+    ed.w=Math.round(img.naturalWidth*s);ed.h=Math.round(img.naturalHeight*s);ed.img=img;ed.ops=[];ed.draft=null;ed.caption=false;ed.info=info;ed.resolve=res;ed.tool="arrow";$("#eTools").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x.dataset.tool==="arrow"));
+    $("#eCaption").classList.remove("on");edRender();$("#editor").classList.remove("hidden");
+  });
+}
+$("#eCancel").onclick=async()=>{if(ed.ops.length||ed.caption){if(!(await confirmBox("放棄標示？","剛才畫的內容不會儲存。","放棄")))return}$("#editor").classList.add("hidden");ed.resolve&&ed.resolve(null)};
+$("#eDone").onclick=async()=>{if(!ed.ops.length&&!ed.caption){$("#editor").classList.add("hidden");ed.resolve(null);return}
+  const b=await toBlob(eCan,.9);$("#editor").classList.add("hidden");ed.resolve(b)};
+function infoFor(p,note){return {no:p.no,site:curSite?curSite.name:"",time:fmtTime(p.takenAt||p.time),note:note??p.note,twd:p.lat!=null?`${twdLabel(p)}　(${llText(p)})`:""}}
+
 /* ============ 拍照 → 備註 ============ */
 let queue=[],qi=0;
 $("#shootBtn").onclick=()=>{$("#camInput").value="";$("#camInput").click()};
@@ -489,12 +627,16 @@ async function startCompose(files,fromCamera){
   if(!queue.length)return;qi=0;showCompose();open("#composeSheet");
 }
 function showCompose(){
-  const q=queue[qi];$("#cPreview").src=q.url;$("#cNote").value=q.note;$("#cGps").value=q.gpsText||"";$("#cGpsLine").innerHTML=gpsHtml(q.lat!=null?q:null);
+  const q=queue[qi];$("#cPreview").src=q.url;$("#cNote").value=q.note;$("#cGps").value=q.gpsText||"";$("#cGpsLine").innerHTML=gpsHtml(q.lat!=null?q:null);coordHtml(q.lat!=null?q:null,$("#cCoord"));
   $("#composeCount").textContent=queue.length>1?`${qi+1} / ${queue.length}`:"";$("#cAgain").classList.toggle("hidden",queue.length>1);
   $("#cSave").textContent=queue.length>1?(qi<queue.length-1?"下一張":"全部儲存"):"儲存";
   const st=$("#cStrip");st.classList.toggle("hidden",queue.length<2);st.innerHTML=queue.map((x,i)=>`<img src="${x.url}" class="${i===qi?"cur":""}" data-i="${i}">`).join("");
   st.querySelectorAll("img").forEach(im=>im.onclick=()=>{if(!commit())return;qi=+im.dataset.i;showCompose()});
 }
+$("#cMark").onclick=async()=>{if(!commit())return;const q=queue[qi];
+  const nextNo=Math.max(curSite.nextNo||1,photos.reduce((m,p)=>Math.max(m,p.no),0)+1)+qi;
+  const blob=await openEditor(q.img,infoFor({...q,no:nextNo,takenAt:q.time},q.note));if(!blob)return;
+  const {img,url}=await loadImage(blob);if(!q.origImg)q.origImg=q.img;else URL.revokeObjectURL(q.url);q.img=img;q.url=url;$("#cPreview").src=url;toast("已加上標示")};
 function commit(){const q=queue[qi];const t=$("#cGps").value;if(t!==q.gpsText){const ll=parseLL(t);if(ll===undefined){toast("座標格式不對，例：24.9575, 121.2253");return false}q.gpsText=t;if(ll){q.lat=ll.lat;q.lng=ll.lng;q.acc=null;q.gpsSrc="manual"}else{q.lat=q.lng=null}}q.note=$("#cNote").value.trim();return true}
 $("#cCancel").onclick=()=>{stopMics();if(queue.length>1){URL.revokeObjectURL(queue[qi].url);queue.splice(qi,1);if(qi>=queue.length)qi=queue.length-1;showCompose();return}queue.forEach(q=>URL.revokeObjectURL(q.url));queue=[];close("#composeSheet")};
 $("#cSave").onclick=async()=>{stopMics();if(!commit())return;if(queue.length>1&&qi<queue.length-1){qi++;showCompose();return}const items=queue;queue=[];close("#composeSheet");await saveAll(items)};
@@ -505,7 +647,8 @@ async function saveAll(items){
     try{
       const full=await toBlob(resize(it.img,2048),.85);const thumb=resize(it.img,320).toDataURL("image/jpeg",.72);
       const no=Math.max(site.nextNo||1,photos.reduce((m,p)=>Math.max(m,p.no),0)+1);site.nextNo=no+1;
-      const p={id:uid(),siteId:site.id,no,note:it.note,takenAt:it.time,lat:it.lat??null,lng:it.lng??null,acc:it.acc??null,gpsSrc:it.lat!=null?it.gpsSrc:null,thumb,blob:full,createdAt:Date.now(),driveFileId:null};
+      const orig=it.origImg?await toBlob(resize(it.origImg,2048),.85):null;
+      const p={id:uid(),siteId:site.id,no,note:it.note,takenAt:it.time,orig,lat:it.lat??null,lng:it.lng??null,acc:it.acc??null,gpsSrc:it.lat!=null?it.gpsSrc:null,thumb,blob:full,createdAt:Date.now(),driveFileId:null};
       await dbPut("photos",p);photos.push(p);URL.revokeObjectURL(it.url);
     }catch(e){toast("儲存失敗："+(e&&e.name==="QuotaExceededError"?"手機空間不足":"請再試一次"))}
   }
@@ -519,11 +662,30 @@ function openDetail(id){detailId=id;showDetail(true);open("#detailSheet")}
 function showDetail(reset){
   const l=ordered(),i=l.findIndex(p=>p.id===detailId);if(i<0){close("#detailSheet");return}const p=l[i];
   $("#dNo").textContent="#"+p.no;$("#dTime").textContent=fmtTime(p.takenAt);$("#dImg").src=blobUrl(p);
-  $("#dGpsLine").innerHTML=gpsHtml(p.lat!=null?p:null);
+  $("#dGpsLine").innerHTML=gpsHtml(p.lat!=null?p:null);coordHtml(p.lat!=null?p:null,$("#dCoord"));
+  $("#dRestore").classList.toggle("hidden",!p.orig);
   $("#dDriveLine").innerHTML=p.driveUrl?`☁ <a href="${p.driveUrl}" target="_blank" rel="noopener">在 Google Drive 開啟原圖</a>`:driveBadge(p);
   if(reset){$("#dNote").value=p.note||"";$("#dGps").value=llText(p)}
   $("#dPrev").style.opacity=i<=0?.3:1;$("#dNext").style.opacity=i>=l.length-1?.3:1;
 }
+async function sourceForEdit(p){
+  if(p.slim&&p.driveFileId&&navigator.onLine&&hasToken()){
+    try{const r=await fetch(`${API}/${p.driveFileId}?alt=media`,{headers:{Authorization:"Bearer "+token}});if(r.ok)return await r.blob()}catch{}
+  }
+  return p.blob;
+}
+async function setPhotoImage(p,blob){
+  const {img,url}=await loadImage(blob);p.thumb=resize(img,320).toDataURL("image/jpeg",.72);URL.revokeObjectURL(url);
+  p.blob=blob;p.slim=false;if(p.driveFileId)p.contentDirty=true;
+  await dbPut("photos",p);const s=await dbGet("sites",p.siteId);s.sheetDirty=true;await dbPut("sites",s);
+  await refreshCurrent();showDetail(false);sync();
+}
+$("#dMark").onclick=async()=>{const p=photos.find(x=>x.id===detailId);if(!p)return;if(!(await saveDetail()))return;
+  toast("準備照片中…");const src=await sourceForEdit(p);if(!src){toast("找不到照片");return}
+  const {img,url}=await loadImage(src);const out=await openEditor(img,infoFor(p));URL.revokeObjectURL(url);if(!out)return;
+  if(!p.orig)p.orig=src;await setPhotoImage(p,out);toast(p.driveFileId?"已標示，會更新 Drive 上的照片":"已標示")};
+$("#dRestore").onclick=async()=>{const p=photos.find(x=>x.id===detailId);if(!p||!p.orig)return;
+  if(!(await confirmBox("還原原圖？","照片上的標示會移除。","還原")))return;const o=p.orig;delete p.orig;await setPhotoImage(p,o);toast("已還原原圖")};
 async function saveDetail(){
   const p=photos.find(x=>x.id===detailId);if(!p)return true;
   const note=$("#dNote").value.trim(),ll=parseLL($("#dGps").value);if(ll===undefined){toast("座標格式不對，例：24.9575, 121.2253");return false}
@@ -546,10 +708,10 @@ $("#dDel").onclick=async()=>{const p=photos.find(x=>x.id===detailId);if(!p)retur
 function download(name,blob){const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},2000)}
 async function shareOrDownload(name,blob){const f=new File([blob],name,{type:blob.type});if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],title:name});return}catch(e){if(e.name==="AbortError")return}}download(name,blob)}
 function baseName(){return safeTitle(`${curSite.name}_${curSite.date}`)}
-function plainText(){const L=[`【${curSite.name}】`];if(curSite.address)L.push("地點："+curSite.address);L.push("日期："+curSite.date,`照片：${photos.length} 張`,"");photos.forEach(p=>L.push(`#${p.no}（${fmtTime(p.takenAt)}）${p.note||"（無備註）"}${p.lat!=null?`\n   📍 ${llText(p)} ${mapUrl(p)}`:""}`));if(curSite.driveFolderUrl)L.push("","照片資料夾："+curSite.driveFolderUrl);return L.join("\n")}
-function csvBlob(){const q=v=>`"${String(v??"").replace(/"/g,'""')}"`;return new Blob(["﻿"+[["編號","拍攝時間","備註","緯度","經度","地圖連結","Drive 照片"].map(q).join(",")].concat(photos.map(p=>[p.no,fmtTime(p.takenAt),p.note,p.lat??"",p.lng??"",p.lat!=null?mapUrl(p):"",p.driveUrl||""].map(q).join(","))).join("\r\n")],{type:"text/csv"})}
+function plainText(){const L=[`【${curSite.name}】`];if(curSite.address)L.push("地點："+curSite.address);L.push("日期："+curSite.date,`照片：${photos.length} 張`,"");photos.forEach(p=>L.push(`#${p.no}（${fmtTime(p.takenAt)}）${p.note||"（無備註）"}${p.lat!=null?`\n   ${twdLabel(p)}\n   📍 ${llText(p)} ${mapUrl(p)}`:""}`));if(curSite.driveFolderUrl)L.push("","照片資料夾："+curSite.driveFolderUrl);return L.join("\n")}
+function csvBlob(){const q=v=>`"${String(v??"").replace(/"/g,'""')}"`;return new Blob(["\ufeff"+[["編號","拍攝時間","備註","TWD97 X","TWD97 Y","緯度","經度","地圖連結","Drive 照片"].map(q).join(",")].concat(photos.map(p=>{const t=twd(p);return [p.no,fmtTime(p.takenAt),p.note,t?t.x.toFixed(3):"",t?t.y.toFixed(3):"",p.lat??"",p.lng??"",p.lat!=null?mapUrl(p):"",p.driveUrl||""].map(q).join(",")})).join("\r\n")],{type:"text/csv"})}
 async function reportBlob(){const parts=[];for(const p of photos){let src=p.thumb;try{if(p.blob){const {img,url}=await loadImage(p.blob);src=resize(img,1280).toDataURL("image/jpeg",.78);URL.revokeObjectURL(url)}}catch{}
-  parts.push(`<div class="it"><img src="${src}"><div><h3>#${p.no}</h3><p class="t">${esc(fmtTime(p.takenAt))}</p>${p.lat!=null?`<p class="t">📍 <a href="${mapUrl(p)}">${llText(p)}</a></p>`:""}<p class="n">${esc(p.note||"（無備註）")}</p></div></div>`)}
+  parts.push(`<div class="it"><img src="${src}"><div><h3>#${p.no}</h3><p class="t">${esc(fmtTime(p.takenAt))}</p>${p.lat!=null?`<p class="t">${twdLabel(p)}</p><p class="t">📍 <a href="${mapUrl(p)}">${llText(p)}</a></p>`:""}<p class="n">${esc(p.note||"（無備註）")}</p></div></div>`)}
   return new Blob([`<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(curSite.name)} 場勘報告</title><style>body{font-family:-apple-system,"PingFang TC","Microsoft JhengHei",sans-serif;max-width:900px;margin:24px auto;padding:0 16px;color:#1b1f1d}h1{margin:0 0 4px}.m{color:#666;margin:0 0 20px}.it{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:16px;padding:16px 0;border-top:1px solid #ddd;page-break-inside:avoid}.it img{width:100%;border-radius:6px}h3{margin:0;color:#0f6b5a}.t{color:#777;font-size:13px;margin:2px 0 6px}.n{white-space:pre-wrap;margin:6px 0 0}@media(max-width:600px){.it{grid-template-columns:1fr}}</style></head><body><h1>${esc(curSite.name)}</h1><p class="m">${esc([curSite.address,curSite.date,photos.length+" 張照片"].filter(Boolean).join(" · "))}</p>${parts.join("")}</body></html>`],{type:"text/html"})}
 $("#moreBtn").onclick=()=>{
   const items=[];
@@ -557,7 +719,7 @@ $("#moreBtn").onclick=()=>{
     $("#menuTitle").textContent=curSite.name;
     if(curSite.driveFolderUrl)items.push(`<a href="${curSite.driveFolderUrl}" target="_blank" rel="noopener">📂 開啟 Drive 資料夾<small>照片原圖都在這裡</small></a>`);
     if(curSite.driveSheetUrl)items.push(`<a href="${curSite.driveSheetUrl}" target="_blank" rel="noopener">📊 開啟備註清單（Google 試算表）</a>`);
-    items.push(`<button data-act="copy">複製全部備註<small>貼到 LINE、Email</small></button>`,`<button data-act="csv">匯出 CSV<small>Excel 可直接開啟</small></button>`,`<button data-act="report">匯出場勘報告（HTML）<small>含照片，可分享或列印成 PDF</small></button>`,`<button data-act="edit">編輯名稱 / 地址 / 日期</button>`,`<button data-act="delsite" style="color:var(--warn)">刪除整個場勘</button>`);
+    items.push(`<button data-act="copy">複製全部備註<small>貼到 LINE、Email</small></button>`,`<button data-act="coords">複製全部 TWD97 座標<small>每行：編號,X,Y,備註，可貼到 Excel</small></button>`,`<button data-act="csv">匯出 CSV<small>Excel 可直接開啟</small></button>`,`<button data-act="report">匯出場勘報告（HTML）<small>含照片，可分享或列印成 PDF</small></button>`,`<button data-act="edit">編輯名稱 / 地址 / 日期</button>`,`<button data-act="delsite" style="color:var(--warn)">刪除整個場勘</button>`);
   }else $("#menuTitle").textContent="場勘相機";
   if(!CLIENT_ID.startsWith("__"))items.push(hasToken()?`<button data-act="sync">立即同步到 Drive</button>`:`<button data-act="login">連線 Google Drive</button>`);
   items.push(`<button data-act="help">加到 iPhone 主畫面的方法</button>`);
@@ -567,6 +729,7 @@ $("#moreBtn").onclick=()=>{
 async function menuAct(a){
   close("#menuSheet");
   if(a==="copy"){try{await navigator.clipboard.writeText(plainText());toast("已複製全部備註")}catch{toast("無法複製")}}
+  if(a==="coords"){const L=photos.filter(p=>p.lat!=null).map(p=>`${p.no},${twdText(p)},${(p.note||"").replace(/[\r\n,]+/g," ")}`);if(!L.length){toast("這個場勘沒有座標");return}copyText(L.join("\n"),`已複製 ${L.length} 筆 TWD97 座標`)}
   if(a==="csv")shareOrDownload(baseName()+"_備註.csv",csvBlob());
   if(a==="report"){toast("產生報告中…");shareOrDownload(baseName()+"_場勘報告.html",await reportBlob())}
   if(a==="edit"){editingSite=curSite;$("#siteSheetTitle").textContent="編輯場勘";$("#sSave").textContent="儲存";$("#sName").value=curSite.name;$("#sAddr").value=curSite.address||"";$("#sDate").value=curSite.date;open("#siteSheet")}
